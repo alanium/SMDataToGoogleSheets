@@ -17,7 +17,7 @@ SALESMEETINGSDB = constants['SM']
 
 credentials_file = 'client_secret.json'
 spreadsheet_id = '1xX6QGLXL_0_5zgurpF6rEBqDLwfszXSiPnDPrm59yOU'
-worksheet_name = 'Copy of January 2024'
+worksheet_name = 'January 2024'
 
 
 def compare(str_1, str_2, umbral=0.6):
