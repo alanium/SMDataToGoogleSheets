@@ -1,0 +1,4 @@
+wkhtmltopdf/
+output_pdf/
+env/
+__pycache__/
