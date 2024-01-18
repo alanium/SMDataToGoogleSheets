@@ -5,8 +5,10 @@ import data
 import json
 import difflib
 from flask import Flask, render_template
+from threading import Thread
 
 app = Flask(__name__)
+
 
 with open('config.json', 'r') as config_file:
     constants = json.load(config_file)
@@ -98,8 +100,10 @@ def procesar_google_sheets():
     # Obtener los títulos de la hoja de cálculo
     titulos = google_sheets_data[4]
 
-    # Obtener índice de la columna 'Nombre'
+    # Obtener índice de las columnas 'Nombre', 'Tags' y 'Notes'
     indice_nombre = titulos.index('Nombre')
+    indice_tags = titulos.index('Tags')
+    indice_notes = titulos.index('Notes')
 
     # Inicializar el contador de celdas vacías
     celdas_vacias_consecutivas = 0
@@ -107,6 +111,13 @@ def procesar_google_sheets():
     # Iterar sobre las filas de la hoja de cálculo a partir de la quinta fila (índice 4)
     for row_number, fila in enumerate(google_sheets_data[5:], start=5):
         nombre_fila = fila[indice_nombre]
+        tags_fila = fila[indice_tags]
+        notes_fila = fila[indice_notes]
+
+        # Verificar si alguna de las columnas 'Tags' o 'Notes' contiene algo
+        if tags_fila or notes_fila:
+            print(f"Skipping row {row_number} because Tags or Notes is not empty.")
+            continue
 
         # Verificar si la celda de la columna 'Nombre' está vacía
         if not nombre_fila:
@@ -122,22 +133,16 @@ def procesar_google_sheets():
             # Reiniciar el contador de celdas vacías consecutivas
             celdas_vacias_consecutivas = 0
 
-        # Buscar el nombre en Notion
+        # Buscar el nombre en Notion solo si 'Tags' y 'Notes' están vacías
         notion_result = buscar_nombre_en_notion(nombre_fila, notion_data)
 
         if notion_result:
-            print(f"Coincidencia encontrada para el nombre: {nombre_fila}")
-
-            # Extract content and tag from Notion result
             content, tag = notion_result
-
-            # Update Google Sheets
             update_google_sheets(row_number + 1, tag, content, 'M', 'N')
         else:
-            print(f"No se encontró coincidencia para el nombre: {nombre_fila}")
+            update_google_sheets(row_number + 1, 'not found', 'not found', 'M', 'N')
 
-@app.route('/')
-def index():
+def ejecutar_proceso():
     try:
         procesar_google_sheets()
         mensaje = "La hoja de cálculo se ha actualizado exitosamente."
@@ -146,9 +151,15 @@ def index():
     except Exception as e:
         mensaje = f"Error durante la actualización: {e}"
 
-    return render_template('index.html', mensaje=mensaje)
+    print(mensaje)
 
-# Agrega el resto de tu código aquí
+@app.route('/')
+def index():
+    t = Thread(target=ejecutar_proceso)
+    t.start()
+    
+    return render_template('index.html', mensaje="Ya puede cerrar esta pestaña :)", worksheet=worksheet_name)
+
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000)
