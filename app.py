@@ -247,14 +247,15 @@ def generate_dashboard():
     # Combina nombres similares
     dashboard = combine_similar_names(dashboard)
 
-    # Sumar 'Total Appointments' de 'noname' a 'Total Cancelled' de 'Total'
+    # editar total con noname
     noname_tot_appts = dashboard.pop('noname', {}).get('Total Appointments', 0)
     noname_tot_visited = dashboard.pop('noname', {}).get('Total Visited', 0)
+    noname_tot_not_q = dashboard.pop('noname', {}).get('Total Not Qualified Appointments', 0)
 
     total_dashboard['Total Appointments'] -= noname_tot_appts
     total_dashboard['Total Cancelled'] += noname_tot_appts
-
     total_dashboard['Total Visited'] -= 5
+    total_dashboard['Total Not Qualified Appointments'] -= 5
     
 
     # Agregar totales generales al diccionario final
@@ -386,7 +387,10 @@ def update_stats():
     
     return render_template('index.html', mensaje="Ya puede cerrar esta pestaña :)", worksheet='stats')
 
-
+"""
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
 
+"""
+
+print(generate_dashboard())
