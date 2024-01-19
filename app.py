@@ -175,6 +175,7 @@ def generate_dashboard():
     total_dashboard = {
         'Total Appointments': 0,
         'Total Visited': 0,
+        'Total Cancelled': 0,
         'Total Qualified Appointments': 0,
         'Total Sold Appointments': 0,
         'Total Estimated Money': 0,
@@ -188,6 +189,7 @@ def generate_dashboard():
             dashboard[sales_person] = {
                 'Total Appointments': 0,
                 'Total Visited': 0,
+                'Total Cancelled': 0,
                 'Total Qualified Appointments': 0,
                 'Total Sold Appointments': 0,
                 'Total Estimated Money': 0,
@@ -196,11 +198,15 @@ def generate_dashboard():
 
         dashboard[sales_person]['Total Appointments'] += 1
 
+        if item.get('appt_status') == 'Cancelled':
+            dashboard[sales_person]['Total Cancelled'] += 1
+
         if item.get('appt_status') == 'Visited':
             dashboard[sales_person]['Total Visited'] += 1
 
-        if item.get('tags') == 'QUALIFIED':
-            dashboard[sales_person]['Total Qualified Appointments'] += 1
+            # Verificar si también tiene tags = 'QUALIFIED'
+            if item.get('tags') == 'QUALIFIED':
+                dashboard[sales_person]['Total Qualified Appointments'] += 1
 
         if item.get('status') == 'SOLD':
             dashboard[sales_person]['Total Sold Appointments'] += 1
@@ -212,13 +218,20 @@ def generate_dashboard():
 
         # Actualizar totales generales
         total_dashboard['Total Appointments'] += 1
+
+        if item.get('appt_status') == 'Cancelled':
+            total_dashboard['Total Cancelled'] += 1
+
         if item.get('appt_status') == 'Visited':
             total_dashboard['Total Visited'] += 1
-        if item.get('tags') == 'QUALIFIED':
-            total_dashboard['Total Qualified Appointments'] += 1
+
+            if item.get('tags') == 'QUALIFIED':
+                total_dashboard['Total Qualified Appointments'] += 1
+
         if item.get('status') == 'SOLD':
             total_dashboard['Total Sold Appointments'] += 1
             total_dashboard['Total Sold Money'] += sold_money
+
         total_dashboard['Total Estimated Money'] += estimated_money
 
     # Cambiar la clave vacía a 'noname'
@@ -227,24 +240,68 @@ def generate_dashboard():
     # Combina nombres similares
     dashboard = combine_similar_names(dashboard)
 
+    # Sumar 'Total Appointments' de 'noname' a 'Total Cancelled' de 'Total'
+    noname_tot_appts = dashboard.pop('noname', {}).get('Total Appointments', 0)
+
+    total_dashboard['Total Appointments'] -= noname_tot_appts
+    total_dashboard['Total Cancelled'] += noname_tot_appts
+    
+
     # Agregar totales generales al diccionario final
     dashboard['Total'] = total_dashboard
-
+    
     return dashboard
 
-# ...
 def update_google_sheets_row(worksheet, row_number, name, values):
     name_column = 'A'
     total_appts_column = 'B'
     total_visited_column = 'C'
-    total_qualified_column = 'D'
-    total_solds_column = 'E'
-    total_estimated_column = 'F'
-    total_sold_money_column = 'G'
+    total_cancelled_column = 'D'
+    total_qualified_column = 'E'
+    total_solds_column = 'F'
+    total_estimated_column = 'G'
+    total_sold_money_column = 'H'
 
+    # Define el formato normal para las celdas normales
+    cell_format_normal = {
+        "textFormat": {
+            "bold": False
+        }
+    }
+
+    # Define el formato en negrita para las celdas de 'Total'
+    cell_format_bold = {
+        "textFormat": {
+            "bold": True
+        }
+    }
+
+    # Actualiza las celdas según el nombre
+    if name == 'Total':
+        worksheet.format(f'{name_column}{row_number}', cell_format_bold)
+        worksheet.format(f'{total_appts_column}{row_number}', cell_format_bold)
+        worksheet.format(f'{total_visited_column}{row_number}', cell_format_bold)
+        worksheet.format(f'{total_cancelled_column}{row_number}', cell_format_bold)
+        worksheet.format(f'{total_qualified_column}{row_number}', cell_format_bold)
+        worksheet.format(f'{total_solds_column}{row_number}', cell_format_bold)
+        worksheet.format(f'{total_estimated_column}{row_number}', cell_format_bold)
+        worksheet.format(f'{total_sold_money_column}{row_number}', cell_format_bold)
+    else:
+        # Actualiza las celdas normales con formato normal
+        worksheet.format(f'{name_column}{row_number}', cell_format_normal)
+        worksheet.format(f'{total_appts_column}{row_number}', cell_format_normal)
+        worksheet.format(f'{total_visited_column}{row_number}', cell_format_normal)        
+        worksheet.format(f'{total_cancelled_column}{row_number}', cell_format_normal)
+        worksheet.format(f'{total_qualified_column}{row_number}', cell_format_normal)
+        worksheet.format(f'{total_solds_column}{row_number}', cell_format_normal)
+        worksheet.format(f'{total_estimated_column}{row_number}', cell_format_normal)
+        worksheet.format(f'{total_sold_money_column}{row_number}', cell_format_normal)
+
+    # Actualiza los datos
     worksheet.update_acell(f'{name_column}{row_number}', name)
     worksheet.update_acell(f'{total_appts_column}{row_number}', values['Total Appointments'])
     worksheet.update_acell(f'{total_visited_column}{row_number}', values['Total Visited'])
+    worksheet.update_acell(f'{total_cancelled_column}{row_number}', values['Total Cancelled'])
     worksheet.update_acell(f'{total_qualified_column}{row_number}', values['Total Qualified Appointments'])
     worksheet.update_acell(f'{total_solds_column}{row_number}', values['Total Sold Appointments'])
     worksheet.update_acell(f'{total_estimated_column}{row_number}', values['Total Estimated Money'])
@@ -299,8 +356,6 @@ def ejecutar_proceso_update_stats():
     print(mensaje)
 
 
-
-
 # Routes
 
 @app.route('/')
@@ -319,9 +374,7 @@ def update_stats():
 
 
 
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-
 
 
