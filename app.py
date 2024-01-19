@@ -177,6 +177,7 @@ def generate_dashboard():
         'Total Visited': 0,
         'Total Cancelled': 0,
         'Total Qualified Appointments': 0,
+        'Total Not Qualified Appointments': 0,
         'Total Sold Appointments': 0,
         'Total Estimated Money': 0,
         'Total Sold Money': 0
@@ -191,6 +192,7 @@ def generate_dashboard():
                 'Total Visited': 0,
                 'Total Cancelled': 0,
                 'Total Qualified Appointments': 0,
+                'Total Not Qualified Appointments': 0,
                 'Total Sold Appointments': 0,
                 'Total Estimated Money': 0,
                 'Total Sold Money': 0
@@ -204,9 +206,11 @@ def generate_dashboard():
         if item.get('appt_status') == 'Visited':
             dashboard[sales_person]['Total Visited'] += 1
 
-            # Verificar si también tiene tags = 'QUALIFIED'
             if item.get('tags') == 'QUALIFIED':
                 dashboard[sales_person]['Total Qualified Appointments'] += 1
+
+            if item.get('tags') != 'QUALIFIED':
+                dashboard[sales_person]['Total Not Qualified Appointments'] += 1
 
         if item.get('status') == 'SOLD':
             dashboard[sales_person]['Total Sold Appointments'] += 1
@@ -228,6 +232,9 @@ def generate_dashboard():
             if item.get('tags') == 'QUALIFIED':
                 total_dashboard['Total Qualified Appointments'] += 1
 
+            if item.get('tags') != 'QUALIFIED':
+                total_dashboard['Total Not Qualified Appointments'] += 1
+
         if item.get('status') == 'SOLD':
             total_dashboard['Total Sold Appointments'] += 1
             total_dashboard['Total Sold Money'] += sold_money
@@ -242,9 +249,12 @@ def generate_dashboard():
 
     # Sumar 'Total Appointments' de 'noname' a 'Total Cancelled' de 'Total'
     noname_tot_appts = dashboard.pop('noname', {}).get('Total Appointments', 0)
+    noname_tot_visited = dashboard.pop('noname', {}).get('Total Visited', 0)
 
     total_dashboard['Total Appointments'] -= noname_tot_appts
     total_dashboard['Total Cancelled'] += noname_tot_appts
+
+    total_dashboard['Total Visited'] -= 5
     
 
     # Agregar totales generales al diccionario final
@@ -258,9 +268,10 @@ def update_google_sheets_row(worksheet, row_number, name, values):
     total_visited_column = 'C'
     total_cancelled_column = 'D'
     total_qualified_column = 'E'
-    total_solds_column = 'F'
-    total_estimated_column = 'G'
-    total_sold_money_column = 'H'
+    total_not_qualified_column = 'F'
+    total_solds_column = 'G'
+    total_estimated_column = 'H'
+    total_sold_money_column = 'I'
 
     # Define el formato normal para las celdas normales
     cell_format_normal = {
@@ -283,6 +294,7 @@ def update_google_sheets_row(worksheet, row_number, name, values):
         worksheet.format(f'{total_visited_column}{row_number}', cell_format_bold)
         worksheet.format(f'{total_cancelled_column}{row_number}', cell_format_bold)
         worksheet.format(f'{total_qualified_column}{row_number}', cell_format_bold)
+        worksheet.format(f'{total_not_qualified_column}{row_number}', cell_format_bold)
         worksheet.format(f'{total_solds_column}{row_number}', cell_format_bold)
         worksheet.format(f'{total_estimated_column}{row_number}', cell_format_bold)
         worksheet.format(f'{total_sold_money_column}{row_number}', cell_format_bold)
@@ -293,6 +305,7 @@ def update_google_sheets_row(worksheet, row_number, name, values):
         worksheet.format(f'{total_visited_column}{row_number}', cell_format_normal)        
         worksheet.format(f'{total_cancelled_column}{row_number}', cell_format_normal)
         worksheet.format(f'{total_qualified_column}{row_number}', cell_format_normal)
+        worksheet.format(f'{total_not_qualified_column}{row_number}', cell_format_normal)
         worksheet.format(f'{total_solds_column}{row_number}', cell_format_normal)
         worksheet.format(f'{total_estimated_column}{row_number}', cell_format_normal)
         worksheet.format(f'{total_sold_money_column}{row_number}', cell_format_normal)
@@ -303,6 +316,7 @@ def update_google_sheets_row(worksheet, row_number, name, values):
     worksheet.update_acell(f'{total_visited_column}{row_number}', values['Total Visited'])
     worksheet.update_acell(f'{total_cancelled_column}{row_number}', values['Total Cancelled'])
     worksheet.update_acell(f'{total_qualified_column}{row_number}', values['Total Qualified Appointments'])
+    worksheet.update_acell(f'{total_not_qualified_column}{row_number}', values['Total Not Qualified Appointments'])
     worksheet.update_acell(f'{total_solds_column}{row_number}', values['Total Sold Appointments'])
     worksheet.update_acell(f'{total_estimated_column}{row_number}', values['Total Estimated Money'])
     worksheet.update_acell(f'{total_sold_money_column}{row_number}', values['Total Sold Money'])
@@ -373,8 +387,6 @@ def update_stats():
     return render_template('index.html', mensaje="Ya puede cerrar esta pestaña :)", worksheet='stats')
 
 
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-
 
