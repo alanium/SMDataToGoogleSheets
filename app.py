@@ -9,7 +9,6 @@ from threading import Thread
 
 app = Flask(__name__)
 
-
 with open('config.json', 'r') as config_file:
     constants = json.load(config_file)
 
@@ -19,6 +18,8 @@ credentials_file = 'client_secret.json'
 spreadsheet_id = '1xX6QGLXL_0_5zgurpF6rEBqDLwfszXSiPnDPrm59yOU'
 worksheet_name = 'January 2024'
 
+
+# Controller
 
 def compare(str_1, str_2, umbral=0.6):
     comparador = difflib.SequenceMatcher(None, str_1, str_2)
@@ -142,7 +143,140 @@ def procesar_google_sheets():
         else:
             update_google_sheets(row_number + 1, 'not found', 'not found', 'M', 'N')
 
-def ejecutar_proceso():
+def parse_google_sheets_data():
+    data = get_google_sheets()
+    headers = data[4] 
+    result = []
+
+    for row in data[5:]:
+        item = {}
+        for i, header in enumerate(headers):
+            if header != '':
+                item[header.lower()] = row[i]
+        result.append(item)
+
+    return result
+
+def combine_similar_names(dashboard):
+    keys = list(dashboard.keys())
+    for i in range(len(keys) - 1):
+        for j in range(i + 1, len(keys)):
+            if compare(keys[i], keys[j]):
+                # Combinar las estadísticas de ambos y eliminar la clave antigua
+                dashboard[keys[i]] = {
+                    metric: dashboard[keys[i]][metric] + dashboard[keys[j]][metric] for metric in dashboard[keys[i]]
+                }
+                del dashboard[keys[j]]
+    return dashboard
+
+def generate_dashboard():
+    data = parse_google_sheets_data()
+    dashboard = {}
+    total_dashboard = {
+        'Total Appointments': 0,
+        'Total Visited': 0,
+        'Total Qualified Appointments': 0,
+        'Total Sold Appointments': 0,
+        'Total Estimated Money': 0,
+        'Total Sold Money': 0
+    }
+
+    for item in data:
+        sales_person = item.get('sales person ', 'Unknown')
+
+        if sales_person not in dashboard:
+            dashboard[sales_person] = {
+                'Total Appointments': 0,
+                'Total Visited': 0,
+                'Total Qualified Appointments': 0,
+                'Total Sold Appointments': 0,
+                'Total Estimated Money': 0,
+                'Total Sold Money': 0
+            }
+
+        dashboard[sales_person]['Total Appointments'] += 1
+
+        if item.get('appt_status') == 'Visited':
+            dashboard[sales_person]['Total Visited'] += 1
+
+        if item.get('tags') == 'QUALIFIED':
+            dashboard[sales_person]['Total Qualified Appointments'] += 1
+
+        if item.get('status') == 'SOLD':
+            dashboard[sales_person]['Total Sold Appointments'] += 1
+            sold_money = float(item.get('latest estimate total', '').replace('$', '').replace(',', '')) if item.get('latest estimate total') else 0
+            dashboard[sales_person]['Total Sold Money'] += sold_money
+
+        estimated_money = float(item.get('latest estimate total', '').replace('$', '').replace(',', '')) if item.get('latest estimate total') else 0
+        dashboard[sales_person]['Total Estimated Money'] += estimated_money
+
+        # Actualizar totales generales
+        total_dashboard['Total Appointments'] += 1
+        if item.get('appt_status') == 'Visited':
+            total_dashboard['Total Visited'] += 1
+        if item.get('tags') == 'QUALIFIED':
+            total_dashboard['Total Qualified Appointments'] += 1
+        if item.get('status') == 'SOLD':
+            total_dashboard['Total Sold Appointments'] += 1
+            total_dashboard['Total Sold Money'] += sold_money
+        total_dashboard['Total Estimated Money'] += estimated_money
+
+    # Cambiar la clave vacía a 'noname'
+    dashboard['noname'] = dashboard.pop('')
+
+    # Combina nombres similares
+    dashboard = combine_similar_names(dashboard)
+
+    # Agregar totales generales al diccionario final
+    dashboard['Total'] = total_dashboard
+
+    return dashboard
+
+# ...
+def update_google_sheets_row(worksheet, row_number, name, values):
+    name_column = 'A'
+    total_appts_column = 'B'
+    total_visited_column = 'C'
+    total_qualified_column = 'D'
+    total_solds_column = 'E'
+    total_estimated_column = 'F'
+    total_sold_money_column = 'G'
+
+    worksheet.update_acell(f'{name_column}{row_number}', name)
+    worksheet.update_acell(f'{total_appts_column}{row_number}', values['Total Appointments'])
+    worksheet.update_acell(f'{total_visited_column}{row_number}', values['Total Visited'])
+    worksheet.update_acell(f'{total_qualified_column}{row_number}', values['Total Qualified Appointments'])
+    worksheet.update_acell(f'{total_solds_column}{row_number}', values['Total Sold Appointments'])
+    worksheet.update_acell(f'{total_estimated_column}{row_number}', values['Total Estimated Money'])
+    worksheet.update_acell(f'{total_sold_money_column}{row_number}', values['Total Sold Money'])
+
+def update_google_sheets_stats():
+    dashboard = generate_dashboard()
+    worksheet_name = 'stats'
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        credentials = ServiceAccountCredentials.from_json_keyfile_name(credentials_file, scope)
+        client = gspread.authorize(credentials)
+
+        spreadsheet = client.open_by_key(spreadsheet_id)
+        worksheet = spreadsheet.worksheet(worksheet_name)
+
+        row_number = 2  # Assuming data starts from row 2
+        for name, values in dashboard.items():
+            update_google_sheets_row(worksheet, row_number, name, values)
+            row_number += 1
+
+        print("Data updated successfully.")
+
+    except gspread.exceptions.APIError as e:
+        if 'The caller does not have permission' in str(e):
+            raise PermissionError("No tienes permisos para actualizar la hoja de cálculo.")
+        else:
+            raise
+
+
+# segundo plano
+def ejecutar_proceso_google_sheets():
     try:
         procesar_google_sheets()
         mensaje = "La hoja de cálculo se ha actualizado exitosamente."
@@ -153,13 +287,41 @@ def ejecutar_proceso():
 
     print(mensaje)
 
+def ejecutar_proceso_update_stats():
+    try:
+        update_google_sheets_stats()
+        mensaje = "La hoja de cálculo se ha actualizado exitosamente."
+    except PermissionError as e:
+        mensaje = str(e)
+    except Exception as e:
+        mensaje = f"Error durante la actualización: {e}"
+
+    print(mensaje)
+
+
+
+
+# Routes
+
 @app.route('/')
 def index():
-    t = Thread(target=ejecutar_proceso)
+    t = Thread(target=ejecutar_proceso_google_sheets)
     t.start()
     
     return render_template('index.html', mensaje="Ya puede cerrar esta pestaña :)", worksheet=worksheet_name)
 
+@app.route('/update_stats')
+def update_stats():
+    t = Thread(target=ejecutar_proceso_update_stats)
+    t.start()
+    
+    return render_template('index.html', mensaje="Ya puede cerrar esta pestaña :)", worksheet='stats')
+
+
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
+
+
+
